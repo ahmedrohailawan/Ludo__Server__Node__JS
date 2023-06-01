@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Ludo Game</title>
+  <style>
+    .container {
+      margin-top: 70px;
+      display: flex;
+      margin: auto;
+      align-items: center;
+      justify-content: center;
+    }
+    .join-btn {
+      padding: 10px 20px;
+      font-size: 18px;
+      border: none;
+      background-color: #4CAF50;
+      color: white;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    .yourturn-btn {
+      padding: 10px 20px;
+      font-size: 18px;
+      border: none;
+      background-color: #4CAF50;
+      color: white;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    .message {
+      font-size: 20px;
+      margin-top: 20px;
+    }
+    .dice {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 120px;
+      height: 120px;
+      border: 1px solid black;
+      font-size: 32px;
+      margin-top: 20px;
+    }
+    .dicetext {
+      font-size: 25px;
+      margin-top: 30px;
+    }
+    .current-player {
+      font-size: 24px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div>
+            <h1>Ludo Game</h1>
+    <div id="joinButtonContainer" class="joinButtonContainer">
+      <button id="joinButton" class="join-btn">Join Game</button>
+    </div>
+    <div id="playerListContainer" style="display: none;"></div>
+    <div id="diceContainer" style="display: none;">
+      <div class="dicetext">Dice</div>
+      <div class="dice" id="dice"></div>
+      <br>
+      <button id="nextTurnButton" class="yourturn-btn" style="display: none;">Your Turn</button>
+    </div>
+        <div id="messageContainer" class="messageContainer"></div>
+    <div class="current-player" id="currentPlayerContainer" style="display: none;"></div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    // Elements
+    const joinButtonContainer = document.getElementById('joinButtonContainer');
+    const joinButton = document.getElementById('joinButton');
+    const messageContainer = document.getElementById('messageContainer');
+    const currentPlayerContainer = document.getElementById('currentPlayerContainer');
+    const playerListContainer = document.getElementById('playerListContainer');
+    const diceContainer = document.getElementById('diceContainer');
+    const diceElement = document.getElementById('dice');
+    const nextTurnButton = document.getElementById('nextTurnButton');
+
+    // Event listeners
+    joinButton.addEventListener('click', joinGame);
+    nextTurnButton.addEventListener('click', nextTurn);
+
+    // Socket events
+    socket.on('connect', () => {
+      console.log('Connected to server');
+    });
+
+    socket.on('alreadyJoined', () => {
+      showErrorMessage('You have already joined the game');
+      removeJoinButton();
+    });
+
+    socket.on('serverFull', () => {
+      showErrorMessage('Sorry, the server is full');
+      hideJoinButton();
+      hideRollDiceButton();
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 3000);
+    });
+
+    socket.on('playerJoined', (newPlayer) => {
+      displayPlayerList(newPlayer);
+      if (newPlayer.playerId === socket.id) {
+        hideJoinButton();
+        showPlayerList();
+        showDiceContainer();
+      }
+    });
+
+    socket.on('playerDisconnected', (disconnectedPlayerId) => {
+      removePlayerFromList(disconnectedPlayerId);
+      if (disconnectedPlayerId === socket.id) {
+        showJoinButton();
+        hidePlayerList();
+        hideDiceContainer();
+        hideCurrentPlayer();
+      }
+    });
+
+    socket.on('activePlayers', (players) => {
+      displayPlayerList(players);
+    });
+
+    socket.on('diceRolled', ({ playerId, diceValue }) => {
+      const playerName = getPlayerName(playerId);
+      showDiceRollResult(playerName, diceValue);
+      animateDice(diceValue);
+    });
+
+    socket.on('yourTurn', (playerId) => {
+      const playerName = getPlayerName(playerId);
+      showYourTurnMessage(playerName);
+      showNextTurnButton();
+      disableDice();
+    });
+
+    // Functions
+    function joinGame() {
+      const playerName = prompt('Enter your name:');
+      if (playerName) {
+        socket.emit('joinGame', playerName);
+      }
+    }
+
+    function showErrorMessage(message) {
+      messageContainer.innerHTML = `<div class="message">${message}</div>`;
+    }
+
+    function hideJoinButton() {
+      joinButtonContainer.style.display = 'none';
+    }
+
+    function showJoinButton() {
+      joinButtonContainer.style.display = 'block';
+    }
+
+function showPlayerList() {
+  playerListContainer.style.display = 'block';
+}
+
+
+    function hidePlayerList() {
+      playerListContainer.style.display = 'none';
+    }
+
+    function showDiceContainer() {
+        diceContainer.style.display = 'block';
+    }
+
+    function hideDiceContainer() {
+      diceContainer.style.display = 'none';
+    }
+
+    function showCurrentPlayer(playerName) {
+      currentPlayerContainer.innerHTML = `<div class="current-player">Current Player: ${playerName}</div>`;
+      currentPlayerContainer.style.display = 'block';
+    }
+
+    function hideCurrentPlayer() {
+      currentPlayerContainer.style.display = 'none';
+    }
+
+    function displayPlayerList(players) {
+        playerListContainer.innerHTML = 'Players:';
+
+        for (let i = 0; i < players.length; i++) {
+        const player = players[i];
+        const playerElement = document.createElement('div');
+        playerElement.textContent = player.playerName;
+        playerElement.setAttribute('data-player-id', player.playerId);
+        playerListContainer.appendChild(playerElement);
+      }
+    }
+
+    function removePlayerFromList(playerId) {
+      const playerElement = document.querySelector(`#playerListContainer div[data-player-id="${playerId}"]`);
+      if (playerElement) {
+        playerElement.remove();
+      }
+    }
+
+    function getPlayerName(playerId) {
+      const playerElement = document.querySelector(`#playerListContainer div[data-player-id="${playerId}"]`);
+      if (playerElement) {
+        return playerElement.textContent;
+      }
+      return '';
+    }
+
+    function showDiceRollResult(playerName, diceValue) {
+      messageContainer.innerHTML = `<div class="message">${playerName} rolled a ${diceValue}</div>`;
+    }
+
+    function showYourTurnMessage(playerName) {
+      messageContainer.innerHTML = `<div class="message">It's your turn, ${playerName}!</div>`;
+    }
+
+    function showNextTurnButton() {
+      nextTurnButton.style.display = 'block';
+    }
+
+    function hideNextTurnButton() {
+      nextTurnButton.style.display = 'none';
+    }
+
+    function disableDice() {
+      diceContainer.removeEventListener('click', rollDice);
+    }
+
+    function rollDice() {
+      socket.emit('rollDice');
+    }
+
+    function animateDice(diceValue) {
+      const dice = document.getElementById('dice');
+      dice.classList.add('rolling');
+      setTimeout(() => {
+        dice.classList.remove('rolling');
+        dice.textContent = diceValue;
+      }, 1000);
+    }
+
+    function nextTurn() {
+      hideNextTurnButton();
+      enableDice();
+    }
+
+    function enableDice() {
+      diceContainer.addEventListener('click', rollDice);
+    }
+  </script>
+</body>
+</html>
